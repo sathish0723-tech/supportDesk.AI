@@ -1,0 +1,167 @@
+import { Webhook } from 'svix'
+import { headers } from 'next/headers'
+import connectDB, { User, Company, generateCompanyId } from '@/lib/db'
+
+export async function POST(req) {
+  const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET
+
+  if (!WEBHOOK_SECRET) {
+    throw new Error('Please add CLERK_WEBHOOK_SECRET from Clerk Dashboard to .env.local')
+  }
+
+  // Get the headers
+  const headerPayload = await headers()
+  const svix_id = headerPayload.get('svix-id')
+  const svix_timestamp = headerPayload.get('svix-timestamp')
+  const svix_signature = headerPayload.get('svix-signature')
+
+  // If there are no headers, error out
+  if (!svix_id || !svix_timestamp || !svix_signature) {
+    return new Response('Error occurred -- no svix headers', {
+      status: 400
+    })
+  }
+
+  // Get the body
+  const payload = await req.json()
+  const body = JSON.stringify(payload)
+
+  // Create a new Svix instance with your secret.
+  const wh = new Webhook(WEBHOOK_SECRET)
+
+  let evt
+
+  // Verify the payload with the headers
+  try {
+    evt = wh.verify(body, {
+      'svix-id': svix_id,
+      'svix-timestamp': svix_timestamp,
+      'svix-signature': svix_signature,
+    })
+  } catch (err) {
+    console.error('Error verifying webhook:', err)
+    return new Response('Error occurred', {
+      status: 400
+    })
+  }
+
+  // Handle the webhook
+  const eventType = evt.type
+  const { id, email_addresses, first_name, last_name, image_url } = evt.data
+
+  console.log(`📥 Webhook received: ${eventType} for user ${id}`)
+
+  // Connect to database
+  try {
+    await connectDB()
+    console.log('✅ Database connected')
+  } catch (error) {
+    console.error('❌ Database connection error:', error)
+    return new Response(JSON.stringify({ error: 'Database connection failed', details: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  if (eventType === 'user.created') {
+    try {
+      // Check if user already exists
+      const existingUser = await User.findOne({ clerkId: id })
+      
+      if (existingUser) {
+        console.log(`ℹ️ User already exists: ${existingUser.email}`)
+        return new Response(JSON.stringify({ message: 'User already exists', userId: existingUser._id }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      }
+
+      // Create new user
+      const userData = {
+        clerkId: id,
+        email: email_addresses[0]?.email_address || '',
+        name: `${first_name || ''} ${last_name || ''}`.trim() || email_addresses[0]?.email_address?.split('@')[0] || 'User',
+        firstName: first_name || '',
+        lastName: last_name || '',
+        image: image_url || '',
+        emailVerified: email_addresses[0]?.verification?.status === 'verified',
+        isActive: true,
+        lastLoginAt: new Date(),
+      }
+
+      console.log('📝 Creating user with data:', { clerkId: userData.clerkId, email: userData.email })
+
+      const user = new User(userData)
+      const savedUser = await user.save()
+      
+      console.log('✅ User created in MongoDB:', {
+        id: savedUser._id,
+        clerkId: savedUser.clerkId,
+        email: savedUser.email,
+        collection: 'users'
+      })
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'User created successfully',
+        userId: savedUser._id,
+        email: savedUser.email
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    } catch (error) {
+      console.error('❌ Error creating user:', error)
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      })
+      return new Response(JSON.stringify({ 
+        error: 'Error creating user', 
+        details: error.message 
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+  }
+
+  if (eventType === 'user.updated') {
+    try {
+      const user = await User.findOneAndUpdate(
+        { clerkId: id },
+        {
+          email: email_addresses[0]?.email_address || '',
+          name: `${first_name || ''} ${last_name || ''}`.trim() || email_addresses[0]?.email_address?.split('@')[0] || 'User',
+          firstName: first_name || '',
+          lastName: last_name || '',
+          image: image_url || '',
+          emailVerified: email_addresses[0]?.verification?.status === 'verified',
+          lastLoginAt: new Date(),
+        },
+        { new: true, upsert: false }
+      )
+
+      if (user) {
+        console.log('✅ User updated in MongoDB:', user.email)
+      }
+    } catch (error) {
+      console.error('Error updating user:', error)
+      return new Response('Error updating user', { status: 500 })
+    }
+  }
+
+  if (eventType === 'user.deleted') {
+    try {
+      await User.findOneAndDelete({ clerkId: id })
+      console.log('✅ User deleted from MongoDB:', id)
+    } catch (error) {
+      console.error('Error deleting user:', error)
+      return new Response('Error deleting user', { status: 500 })
+    }
+  }
+
+  return new Response('', { status: 200 })
+}
+
