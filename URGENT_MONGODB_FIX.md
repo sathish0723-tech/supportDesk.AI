@@ -131,3 +131,4 @@ If you're not sure about the credentials:
 3. **Verify the username** is exactly `sathish23` (case-sensitive)
 4. **Check if the cluster is running** (not paused) in Atlas
 
+

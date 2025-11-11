@@ -85,3 +85,4 @@ npm run dev
 3. **Check if user has correct permissions** (Read and write to any database)
 4. **Try creating a new database user** with a simple password (no special chars)
 
+

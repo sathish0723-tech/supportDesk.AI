@@ -60,3 +60,4 @@ echo "   1. Restart your Next.js server (Ctrl+C, then npm run dev)"
 echo "   2. Run: node verify-database.js (to verify)"
 echo ""
 
+

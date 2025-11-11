@@ -62,3 +62,4 @@ Until quota resets or you upgrade:
 
 **Note**: The Gemini API is only used for auto-filling company data. The form works perfectly fine without it!
 
+
