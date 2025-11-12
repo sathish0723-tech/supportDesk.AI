@@ -86,3 +86,4 @@ npm run dev
 4. **Try creating a new database user** with a simple password (no special chars)
 
 
+
