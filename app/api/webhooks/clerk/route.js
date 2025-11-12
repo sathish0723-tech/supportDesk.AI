@@ -1,6 +1,7 @@
 import { Webhook } from 'svix'
 import { headers } from 'next/headers'
 import connectDB, { User, Company, generateCompanyId } from '@/lib/db'
+import { findCompanyByEmailDomain, extractDomainFromEmail } from '@/lib/dns-utils'
 
 export async function POST(req) {
   const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET
@@ -76,11 +77,39 @@ export async function POST(req) {
         })
       }
 
+      // Get user email
+      const userEmail = email_addresses[0]?.email_address || ''
+      console.log(`📧 Processing user creation for email: ${userEmail}`)
+      
+      // Check if there's an existing company for this email domain
+      let existingCompany = null
+      if (userEmail) {
+        try {
+          console.log(`🔍 Starting domain check for email: ${userEmail}`)
+          // Try with MX check first, but if it fails, still check database
+          existingCompany = await findCompanyByEmailDomain(userEmail, Company, false)
+          if (existingCompany) {
+            console.log(`🏢 Found existing company for domain: ${existingCompany.companyName} (${existingCompany.companyId})`)
+          } else {
+            console.log(`ℹ️ No existing company found for email domain: ${userEmail}`)
+          }
+        } catch (error) {
+          console.error('❌ Error checking for existing company by domain:', error)
+          console.error('Error details:', {
+            message: error.message,
+            stack: error.stack
+          })
+          // Continue with user creation even if domain check fails
+        }
+      } else {
+        console.log('⚠️ No email address found for user')
+      }
+
       // Create new user
       const userData = {
         clerkId: id,
-        email: email_addresses[0]?.email_address || '',
-        name: `${first_name || ''} ${last_name || ''}`.trim() || email_addresses[0]?.email_address?.split('@')[0] || 'User',
+        email: userEmail,
+        name: `${first_name || ''} ${last_name || ''}`.trim() || userEmail?.split('@')[0] || 'User',
         firstName: first_name || '',
         lastName: last_name || '',
         image: image_url || '',
@@ -89,15 +118,57 @@ export async function POST(req) {
         lastLoginAt: new Date(),
       }
 
-      console.log('📝 Creating user with data:', { clerkId: userData.clerkId, email: userData.email })
+      // If we found an existing company, associate the user with it
+      if (existingCompany) {
+        userData.companyId = existingCompany.companyId
+        userData.companyName = existingCompany.companyName
+        userData.totalEmployees = existingCompany.totalEmployees
+        userData.industry = existingCompany.industry
+        userData.address = existingCompany.address
+        userData.website = existingCompany.website
+        
+        console.log(`🔗 Associating user with existing company: ${existingCompany.companyName}`)
+      }
+
+      console.log('📝 Creating user with data:', { 
+        clerkId: userData.clerkId, 
+        email: userData.email,
+        companyId: userData.companyId || 'none'
+      })
 
       const user = new User(userData)
       const savedUser = await user.save()
+
+      // If we found an existing company, add user to company members
+      if (existingCompany && savedUser._id) {
+        try {
+          // Check if user is already in members list
+          const isMember = existingCompany.members.some(
+            member => member.userId?.toString() === savedUser._id.toString() || 
+                     member.email?.toLowerCase() === userEmail.toLowerCase()
+          )
+
+          if (!isMember) {
+            existingCompany.members.push({
+              userId: savedUser._id,
+              email: userEmail,
+              role: 'member',
+              addedAt: new Date(),
+            })
+            await existingCompany.save()
+            console.log(`✅ Added user to company members: ${existingCompany.companyName}`)
+          }
+        } catch (error) {
+          console.error('Error adding user to company members:', error)
+          // Don't fail user creation if adding to company fails
+        }
+      }
       
       console.log('✅ User created in MongoDB:', {
         id: savedUser._id,
         clerkId: savedUser.clerkId,
         email: savedUser.email,
+        companyId: savedUser.companyId || 'none',
         collection: 'users'
       })
 
@@ -105,7 +176,9 @@ export async function POST(req) {
         success: true, 
         message: 'User created successfully',
         userId: savedUser._id,
-        email: savedUser.email
+        email: savedUser.email,
+        companyId: savedUser.companyId || null,
+        autoAssociated: !!existingCompany
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }

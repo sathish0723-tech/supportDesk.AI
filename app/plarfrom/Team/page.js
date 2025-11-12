@@ -17,6 +17,7 @@ export default function TeamPage() {
   const [editingTeam, setEditingTeam] = useState(null)
   const [isCreating, setIsCreating] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [companyLogos, setCompanyLogos] = useState({})
   const [formData, setFormData] = useState({
     teamName: "",
     description: "",
@@ -37,6 +38,17 @@ export default function TeamPage() {
     fetchTeams()
   }, [isLoaded, user])
 
+  // Fetch logo from domain (same as onboarding)
+  const fetchLogoFromDomain = (domain) => {
+    if (!domain) return null
+    
+    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].trim()
+    if (cleanDomain) {
+      return `https://logo.clearbit.com/${cleanDomain}`
+    }
+    return null
+  }
+
   const fetchTeams = async () => {
     try {
       setIsLoading(true)
@@ -46,7 +58,21 @@ export default function TeamPage() {
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
-          setTeams(data.data || [])
+          const teamsData = data.data || []
+          setTeams(teamsData)
+          
+          // Fetch logos for teams with company domain
+          const logos = {}
+          teamsData.forEach(team => {
+            if (team.companyDomain) {
+              const logoUrl = fetchLogoFromDomain(team.companyDomain)
+              if (logoUrl) {
+                logos[team.teamId] = logoUrl
+              }
+            }
+          })
+          setCompanyLogos(logos)
+          
           if (data.message && data.message.includes("No company found")) {
             setError("Please complete company setup first to create teams.")
           }
@@ -557,52 +583,77 @@ export default function TeamPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {teams.map((team) => (
-              <Card key={team._id || team.teamId} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="flex items-center gap-2">
-                        <Users className="h-5 w-5" />
-                        {team.teamName}
-                      </CardTitle>
-                      {team.description && (
-                        <CardDescription>{team.description}</CardDescription>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {teams.map((team) => {
+              const logoUrl = companyLogos[team.teamId]
+              return (
+                <Card key={team._id || team.teamId} className="hover:shadow-lg transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {logoUrl ? (
+                          <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden border border-gray-200 dark:border-gray-600 flex-shrink-0">
+                            <img
+                              src={logoUrl}
+                              alt={team.companyName || "Company"}
+                              className="w-full h-full object-contain p-1.5"
+                              onError={(e) => {
+                                e.target.style.display = 'none'
+                                e.target.nextSibling.style.display = 'flex'
+                              }}
+                            />
+                            <div className="w-full h-full items-center justify-center hidden">
+                              <Users className="h-5 w-5 text-gray-400" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center border border-gray-200 dark:border-gray-600 flex-shrink-0">
+                            <Users className="h-5 w-5 text-gray-400" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-base font-semibold truncate">
+                            {team.teamName}
+                          </CardTitle>
+                          {team.companyName && (
+                            <CardDescription className="text-xs truncate">
+                              {team.companyName}
+                            </CardDescription>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 flex-shrink-0"
+                        onClick={() => handleEditTeam(team)}
+                        title="Edit team"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex items-center justify-between text-gray-600 dark:text-gray-400">
+                        <span className="font-medium">Members:</span>
+                        <span>{team.members?.length || 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-gray-600 dark:text-gray-400">
+                        <span className="font-medium">Created:</span>
+                        <span>{new Date(team.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      </div>
+                      {team.companyDomain && (
+                        <div className="flex items-center justify-between text-gray-500 dark:text-gray-500">
+                          <span className="font-medium">Domain:</span>
+                          <span className="truncate ml-2 max-w-[120px]">{team.companyDomain}</span>
+                        </div>
                       )}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleEditTeam(team)}
-                      title="Edit team"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {team.companyName && (
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        <span className="font-medium">Company:</span> {team.companyName}
-                      </div>
-                    )}
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      <span className="font-medium">Team ID:</span> {team.teamId}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      <span className="font-medium">Members:</span> {team.members?.length || 0}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      <span className="font-medium">Created:</span>{" "}
-                      {new Date(team.createdAt).toLocaleDateString()}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         )}
       </div>

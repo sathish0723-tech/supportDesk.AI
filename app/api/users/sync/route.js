@@ -1,5 +1,6 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import connectDB, { User, Company, generateCompanyId } from '@/lib/db'
+import { findCompanyByEmailDomain } from '@/lib/dns-utils'
 
 /**
  * Sync Clerk user to MongoDB
@@ -62,12 +63,97 @@ export async function POST(req) {
         { new: true }
       )
       console.log('✅ User updated:', { id: user._id, email: user.email, collection: 'users' })
+      
+      // If user doesn't have a company, check if one exists for their domain
+      if (!user.companyId && userData.email) {
+        try {
+          console.log(`🔍 Checking for existing company by domain for user: ${userData.email}`)
+          const existingCompany = await findCompanyByEmailDomain(userData.email, Company, false)
+          if (existingCompany) {
+            // Associate user with existing company
+            user.companyId = existingCompany.companyId
+            user.companyName = existingCompany.companyName
+            user.totalEmployees = existingCompany.totalEmployees
+            user.industry = existingCompany.industry
+            user.address = existingCompany.address
+            user.website = existingCompany.website
+            await user.save()
+            
+            // Add user to company members if not already there
+            const isMember = existingCompany.members.some(
+              member => member.userId?.toString() === user._id.toString() || 
+                       member.email?.toLowerCase() === userData.email.toLowerCase()
+            )
+
+            if (!isMember) {
+              existingCompany.members.push({
+                userId: user._id,
+                email: userData.email,
+                role: 'member',
+                addedAt: new Date(),
+              })
+              await existingCompany.save()
+              console.log(`✅ Associated user with existing company: ${existingCompany.companyName}`)
+            }
+          }
+        } catch (error) {
+          console.error('Error checking for existing company by domain:', error)
+          // Continue even if domain check fails
+        }
+      }
     } else {
       // Create new user
       console.log('📝 Creating new user:', userData.email)
+      
+      // Check if there's an existing company for this email domain
+      let existingCompany = null
+      if (userData.email) {
+        try {
+          console.log(`🔍 Checking for existing company by domain for new user: ${userData.email}`)
+          existingCompany = await findCompanyByEmailDomain(userData.email, Company, false)
+          if (existingCompany) {
+            console.log(`🏢 Found existing company for domain: ${existingCompany.companyName}`)
+            // Associate user with existing company
+            userData.companyId = existingCompany.companyId
+            userData.companyName = existingCompany.companyName
+            userData.totalEmployees = existingCompany.totalEmployees
+            userData.industry = existingCompany.industry
+            userData.address = existingCompany.address
+            userData.website = existingCompany.website
+          }
+        } catch (error) {
+          console.error('Error checking for existing company by domain:', error)
+          // Continue with user creation even if domain check fails
+        }
+      }
+      
       user = new User(userData)
       await user.save()
       console.log('✅ User created:', { id: user._id, email: user.email, collection: 'users' })
+      
+      // If we found an existing company, add user to company members
+      if (existingCompany && user._id) {
+        try {
+          const isMember = existingCompany.members.some(
+            member => member.userId?.toString() === user._id.toString() || 
+                     member.email?.toLowerCase() === userData.email.toLowerCase()
+          )
+
+          if (!isMember) {
+            existingCompany.members.push({
+              userId: user._id,
+              email: userData.email,
+              role: 'member',
+              addedAt: new Date(),
+            })
+            await existingCompany.save()
+            console.log(`✅ Added user to company members: ${existingCompany.companyName}`)
+          }
+        } catch (error) {
+          console.error('Error adding user to company members:', error)
+          // Don't fail user creation if adding to company fails
+        }
+      }
     }
 
     return Response.json({

@@ -1,6 +1,6 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import connectTicketsDB, { getTeam, generateTeamId } from '@/modules/team'
-import connectDB, { User } from '@/lib/db'
+import connectDB, { User, Company } from '@/lib/db'
 
 /**
  * Create a new team
@@ -192,9 +192,19 @@ export async function GET(req) {
       isActive: true
     }).sort({ createdAt: -1 })
 
+    // Get company info to include domain/website for logo
+    const company = await Company.findOne({ companyId: userDoc.companyId })
+    const companyDomain = company?.domain || company?.website?.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0] || null
+
+    // Add company domain to each team for logo fetching
+    const teamsWithDomain = teams.map(team => ({
+      ...team.toObject(),
+      companyDomain: companyDomain
+    }))
+
     return Response.json({
       success: true,
-      data: teams,
+      data: teamsWithDomain,
       message: 'Teams fetched successfully'
     })
   } catch (error) {

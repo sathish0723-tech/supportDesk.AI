@@ -69,6 +69,7 @@ export default function AuthPage() {
                 path="/auth"
                 signUpUrl="/auth?mode=sign-up"
                 afterSignInUrl="/dashboard"
+                fallbackRedirectUrl="/dashboard"
               />
             ) : (
               <SignUp 
@@ -82,6 +83,7 @@ export default function AuthPage() {
                 path="/auth"
                 signInUrl="/auth?mode=sign-in"
                 afterSignUpUrl="/onboarding"
+                fallbackRedirectUrl="/onboarding"
               />
             )}
           </div>

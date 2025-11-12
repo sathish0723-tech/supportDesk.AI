@@ -37,12 +37,13 @@ export default function OnboardingPage() {
     if (!isLoaded) return
     
     const timer = setTimeout(() => {
+      // Only redirect if user is definitely not authenticated and not in auth flow
       if (!user && !hasRedirected.current) {
         hasRedirected.current = true
         router.push("/auth")
         return
       }
-    }, 500)
+    }, 2000) // Increased timeout to allow email verification and session establishment
     
     if (user && !hasFetched.current) {
       hasFetched.current = true
