@@ -46,11 +46,11 @@ const data = {
       items: [
         {
           title: "Dashboard",
-          url: "/dashboard",
+          url: "/Platform/Dashboard ",
         },
         {
           title: "Tickets",
-          url: "/Tickets",
+          url: "/Platform/Tickets",
         },
        
       ],
@@ -76,7 +76,7 @@ const data = {
     },
     {
       title:"ChatTickets",
-      url: "/ChatTickets",
+      url: "#",
       icon: MessageSquare,
       isActive: true,
       items: [
@@ -88,13 +88,13 @@ const data = {
     },
     {
       title:"Team",
-      url: "/plarfrom/Team",
+      url: "#",
       icon: Users,
       isActive: true,
       items: [
         {
           title: "Team",
-          url: "/plarfrom/Team",
+          url: "/Platform/Team",
         },
       ],
     }

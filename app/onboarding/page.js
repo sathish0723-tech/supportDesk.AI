@@ -8,8 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Building2, Loader2, CheckCircle2, Sparkles, Zap, Shield, TrendingUp, Search, Link2 } from "lucide-react"
 
-const GEMINI_API_KEY = "AIzaSyAJq4xxFIi3l9rUh8kmiG8RV3lr3WdIHyA"
-
 export default function OnboardingPage() {
   const { user, isLoaded } = useUser()
   const router = useRouter()
@@ -106,7 +104,6 @@ export default function OnboardingPage() {
         body: JSON.stringify({
           companyName: hasCompanyName ? companyName : null,
           domain: hasDomain ? domainInput : null,
-          geminiApiKey: GEMINI_API_KEY,
         }),
       })
 

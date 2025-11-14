@@ -18,8 +18,18 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+
+  if (!publishableKey) {
+    throw new Error(
+      'Missing NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY environment variable. ' +
+      'Please set it in your Vercel project settings or .env.local file. ' +
+      'Get your key at https://dashboard.clerk.com/last-active?path=api-keys'
+    )
+  }
+
   return (
-    <ClerkProvider>
+    <ClerkProvider publishableKey={publishableKey}>
       <html lang="en">
         <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
           <ConditionalLayout>

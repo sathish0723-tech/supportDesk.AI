@@ -15,7 +15,7 @@ export async function POST(req) {
       )
     }
 
-    const { companyName, domain, geminiApiKey } = await req.json()
+    const { companyName, domain } = await req.json()
 
     if (!companyName && !domain) {
       return Response.json(
@@ -24,10 +24,13 @@ export async function POST(req) {
       )
     }
 
+    // Get Gemini API key from environment variable (server-side)
+    const geminiApiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY
+
     if (!geminiApiKey) {
       return Response.json(
-        { success: false, error: 'Gemini API key is required' },
-        { status: 400 }
+        { success: false, error: 'Gemini API key is not configured. Please set GEMINI_API_KEY environment variable.' },
+        { status: 500 }
       )
     }
 
