@@ -45,3 +45,4 @@ next-env.d.ts
 # Logs
 *.log
 logs/
+.git-credentials.backup
